@@ -25,22 +25,22 @@ private slots:
 
 private:
     void setupUI();
-    void loadTransitionsForSource(obs_source_t *source);
-    void applyTransitionToSource(obs_source_t *source,
-                                  const QString &showId, int showDuration,
-                                  const QString &hideId, int hideDuration);
+    void loadTransitionsForItem(obs_sceneitem_t *item);
+    void applyTransitionToItem(obs_sceneitem_t *item,
+                               const QString &showId, int showDuration,
+                               const QString &hideId, int hideDuration);
 
     static void frontendEventCallback(obs_frontend_event event, void *data);
 
-    QVBoxLayout  *mainLayout      = nullptr;
+    QVBoxLayout  *mainLayout       = nullptr;
     QLabel       *placeholderLabel = nullptr;
-    QWidget      *controlsWidget  = nullptr;
-    QVBoxLayout  *controlsLayout  = nullptr;
-    QComboBox    *showTransition  = nullptr;
-    QSpinBox     *showDuration    = nullptr;
-    QComboBox    *hideTransition  = nullptr;
-    QSpinBox     *hideDuration    = nullptr;
-    QPushButton  *applyAllButton  = nullptr;
+    QWidget      *controlsWidget   = nullptr;
+    QVBoxLayout  *controlsLayout   = nullptr;
+    QComboBox    *showTransition   = nullptr;
+    QSpinBox     *showDuration     = nullptr;
+    QComboBox    *hideTransition   = nullptr;
+    QSpinBox     *hideDuration     = nullptr;
+    QPushButton  *applyAllButton   = nullptr;
 
-    QList<obs_source_t *> selectedSources;
+    QList<obs_sceneitem_t *> selectedItems;
 };
