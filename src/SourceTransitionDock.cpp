@@ -16,6 +16,13 @@ static const QList<QPair<QString, QString>> TRANSITION_TYPES = {
     {"wipe_transition",          "Luma Wipe"},
 };
 
+// Signal handler trampoline — OBS signals are C callbacks
+static void onItemSelect(void *data, calldata_t *)
+{
+    auto *dock = static_cast<SourceTransitionDock *>(data);
+    QMetaObject::invokeMethod(dock, "refreshSelectedSources", Qt::QueuedConnection);
+}
+
 SourceTransitionDock::SourceTransitionDock(QWidget *parent)
     : QWidget(parent)
 {
@@ -26,6 +33,7 @@ SourceTransitionDock::SourceTransitionDock(QWidget *parent)
 SourceTransitionDock::~SourceTransitionDock()
 {
     obs_frontend_remove_event_callback(frontendEventCallback, this);
+    disconnectSceneSignals();
     for (auto *item : selectedItems)
         obs_sceneitem_release(item);
 }
@@ -114,18 +122,55 @@ void SourceTransitionDock::setupUI()
             this, &SourceTransitionDock::onApplyToAll);
 }
 
+void SourceTransitionDock::connectSceneSignals(obs_source_t *scene_source)
+{
+    if (!scene_source) return;
+    signal_handler_t *sh = obs_source_get_signal_handler(scene_source);
+    if (!sh) return;
+    signal_handler_connect(sh, "item_select",   onItemSelect, this);
+    signal_handler_connect(sh, "item_deselect", onItemSelect, this);
+    currentScene = scene_source;
+}
+
+void SourceTransitionDock::disconnectSceneSignals()
+{
+    if (!currentScene) return;
+    signal_handler_t *sh = obs_source_get_signal_handler(currentScene);
+    if (sh) {
+        signal_handler_disconnect(sh, "item_select",   onItemSelect, this);
+        signal_handler_disconnect(sh, "item_deselect", onItemSelect, this);
+    }
+    currentScene = nullptr;
+}
+
 void SourceTransitionDock::frontendEventCallback(obs_frontend_event event, void *data)
 {
     auto *dock = static_cast<SourceTransitionDock *>(data);
     switch (event) {
     case OBS_FRONTEND_EVENT_SCENE_CHANGED:
     case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
-        QMetaObject::invokeMethod(dock, "refreshSelectedSources",
-                                  Qt::QueuedConnection);
+        QMetaObject::invokeMethod(dock, "onSceneChanged", Qt::QueuedConnection);
         break;
     default:
         break;
     }
+}
+
+void SourceTransitionDock::onSceneChanged()
+{
+    disconnectSceneSignals();
+
+    obs_source_t *scene_source = obs_frontend_get_current_scene();
+    if (!scene_source) {
+        placeholderLabel->show();
+        controlsWidget->hide();
+        return;
+    }
+
+    connectSceneSignals(scene_source);
+    obs_source_release(scene_source);
+
+    refreshSelectedSources();
 }
 
 void SourceTransitionDock::refreshSelectedSources()
@@ -171,25 +216,23 @@ void SourceTransitionDock::loadTransitionsForItem(obs_sceneitem_t *item)
     showDuration->blockSignals(true);
     hideDuration->blockSignals(true);
 
-    // Show transition
+    // Do NOT release — we don't own this reference
     obs_source_t *showTr = obs_sceneitem_get_transition(item, true);
     if (showTr) {
         const char *id = obs_source_get_id(showTr);
         int idx = showTransition->findData(QString(id));
         if (idx >= 0) showTransition->setCurrentIndex(idx);
-        obs_source_release(showTr);
     } else {
         showTransition->setCurrentIndex(0);
     }
     showDuration->setValue((int)obs_sceneitem_get_transition_duration(item, true));
 
-    // Hide transition
+    // Do NOT release — we don't own this reference
     obs_source_t *hideTr = obs_sceneitem_get_transition(item, false);
     if (hideTr) {
         const char *id = obs_source_get_id(hideTr);
         int idx = hideTransition->findData(QString(id));
         if (idx >= 0) hideTransition->setCurrentIndex(idx);
-        obs_source_release(hideTr);
     } else {
         hideTransition->setCurrentIndex(0);
     }
