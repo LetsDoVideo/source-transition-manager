@@ -7,13 +7,13 @@
 #include <QGroupBox>
 
 static const QList<QPair<QString, QString>> TRANSITION_TYPES = {
-    {"cut_transition",              "Cut"},
-    {"fade_transition",             "Fade"},
-    {"swipe_transition",            "Swipe"},
-    {"slide_transition",            "Slide"},
-    {"obs_stinger_transition",      "Stinger"},
-    {"fade_to_color_transition",    "Fade to Color"},
-    {"wipe_transition",             "Luma Wipe"},
+    {"cut_transition",           "Cut"},
+    {"fade_transition",          "Fade"},
+    {"swipe_transition",         "Swipe"},
+    {"slide_transition",         "Slide"},
+    {"obs_stinger_transition",   "Stinger"},
+    {"fade_to_color_transition", "Fade to Color"},
+    {"wipe_transition",          "Luma Wipe"},
 };
 
 SourceTransitionDock::SourceTransitionDock(QWidget *parent)
@@ -26,8 +26,8 @@ SourceTransitionDock::SourceTransitionDock(QWidget *parent)
 SourceTransitionDock::~SourceTransitionDock()
 {
     obs_frontend_remove_event_callback(frontendEventCallback, this);
-    for (auto *src : selectedSources)
-        obs_source_release(src);
+    for (auto *item : selectedItems)
+        obs_sceneitem_release(item);
 }
 
 void SourceTransitionDock::setupUI()
@@ -117,7 +117,6 @@ void SourceTransitionDock::setupUI()
 void SourceTransitionDock::frontendEventCallback(obs_frontend_event event, void *data)
 {
     auto *dock = static_cast<SourceTransitionDock *>(data);
-
     switch (event) {
     case OBS_FRONTEND_EVENT_SCENE_CHANGED:
     case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
@@ -131,9 +130,9 @@ void SourceTransitionDock::frontendEventCallback(obs_frontend_event event, void 
 
 void SourceTransitionDock::refreshSelectedSources()
 {
-    for (auto *src : selectedSources)
-        obs_source_release(src);
-    selectedSources.clear();
+    for (auto *item : selectedItems)
+        obs_sceneitem_release(item);
+    selectedItems.clear();
 
     obs_source_t *scene_source = obs_frontend_get_current_scene();
     if (!scene_source) {
@@ -148,14 +147,13 @@ void SourceTransitionDock::refreshSelectedSources()
     obs_scene_enum_items(scene, [](obs_scene_t *, obs_sceneitem_t *item, void *data) -> bool {
         if (obs_sceneitem_selected(item)) {
             auto *dock = static_cast<SourceTransitionDock *>(data);
-            obs_source_t *src = obs_sceneitem_get_source(item);
-            obs_source_addref(src);
-            dock->selectedSources.append(src);
+            obs_sceneitem_addref(item);
+            dock->selectedItems.append(item);
         }
         return true;
     }, this);
 
-    if (selectedSources.isEmpty()) {
+    if (selectedItems.isEmpty()) {
         placeholderLabel->show();
         controlsWidget->hide();
         return;
@@ -163,39 +161,39 @@ void SourceTransitionDock::refreshSelectedSources()
 
     placeholderLabel->hide();
     controlsWidget->show();
-    loadTransitionsForSource(selectedSources.first());
+    loadTransitionsForItem(selectedItems.first());
 }
 
-void SourceTransitionDock::loadTransitionsForSource(obs_source_t *source)
+void SourceTransitionDock::loadTransitionsForItem(obs_sceneitem_t *item)
 {
     showTransition->blockSignals(true);
     hideTransition->blockSignals(true);
     showDuration->blockSignals(true);
     hideDuration->blockSignals(true);
 
-    obs_source_t *showTr = obs_source_get_show_transition(source);
+    // Show transition
+    obs_source_t *showTr = obs_sceneitem_get_transition(item, true);
     if (showTr) {
         const char *id = obs_source_get_id(showTr);
         int idx = showTransition->findData(QString(id));
         if (idx >= 0) showTransition->setCurrentIndex(idx);
-        showDuration->setValue(obs_source_get_show_transition_duration(source));
         obs_source_release(showTr);
     } else {
         showTransition->setCurrentIndex(0);
-        showDuration->setValue(300);
     }
+    showDuration->setValue((int)obs_sceneitem_get_transition_duration(item, true));
 
-    obs_source_t *hideTr = obs_source_get_hide_transition(source);
+    // Hide transition
+    obs_source_t *hideTr = obs_sceneitem_get_transition(item, false);
     if (hideTr) {
         const char *id = obs_source_get_id(hideTr);
         int idx = hideTransition->findData(QString(id));
         if (idx >= 0) hideTransition->setCurrentIndex(idx);
-        hideDuration->setValue(obs_source_get_hide_transition_duration(source));
         obs_source_release(hideTr);
     } else {
         hideTransition->setCurrentIndex(0);
-        hideDuration->setValue(300);
     }
+    hideDuration->setValue((int)obs_sceneitem_get_transition_duration(item, false));
 
     showTransition->blockSignals(false);
     hideTransition->blockSignals(false);
@@ -203,38 +201,38 @@ void SourceTransitionDock::loadTransitionsForSource(obs_source_t *source)
     hideDuration->blockSignals(false);
 }
 
-void SourceTransitionDock::applyTransitionToSource(obs_source_t *source,
+void SourceTransitionDock::applyTransitionToItem(obs_sceneitem_t *item,
     const QString &showId, int showDur,
     const QString &hideId, int hideDur)
 {
     obs_source_t *showTr = obs_source_create_private(
         showId.toUtf8().constData(), nullptr, nullptr);
     if (showTr) {
-        obs_source_set_show_transition(source, showTr);
-        obs_source_set_show_transition_duration(source, showDur);
+        obs_sceneitem_set_transition(item, true, showTr);
+        obs_sceneitem_set_transition_duration(item, true, (uint32_t)showDur);
         obs_source_release(showTr);
     }
 
     obs_source_t *hideTr = obs_source_create_private(
         hideId.toUtf8().constData(), nullptr, nullptr);
     if (hideTr) {
-        obs_source_set_hide_transition(source, hideTr);
-        obs_source_set_hide_transition_duration(source, hideDur);
+        obs_sceneitem_set_transition(item, false, hideTr);
+        obs_sceneitem_set_transition_duration(item, false, (uint32_t)hideDur);
         obs_source_release(hideTr);
     }
 }
 
 void SourceTransitionDock::onShowTransitionChanged()
 {
-    if (selectedSources.isEmpty()) return;
+    if (selectedItems.isEmpty()) return;
     QString id = showTransition->currentData().toString();
     int dur = showDuration->value();
-    for (auto *src : selectedSources) {
+    for (auto *item : selectedItems) {
         obs_source_t *tr = obs_source_create_private(
             id.toUtf8().constData(), nullptr, nullptr);
         if (tr) {
-            obs_source_set_show_transition(src, tr);
-            obs_source_set_show_transition_duration(src, dur);
+            obs_sceneitem_set_transition(item, true, tr);
+            obs_sceneitem_set_transition_duration(item, true, (uint32_t)dur);
             obs_source_release(tr);
         }
     }
@@ -242,15 +240,15 @@ void SourceTransitionDock::onShowTransitionChanged()
 
 void SourceTransitionDock::onHideTransitionChanged()
 {
-    if (selectedSources.isEmpty()) return;
+    if (selectedItems.isEmpty()) return;
     QString id = hideTransition->currentData().toString();
     int dur = hideDuration->value();
-    for (auto *src : selectedSources) {
+    for (auto *item : selectedItems) {
         obs_source_t *tr = obs_source_create_private(
             id.toUtf8().constData(), nullptr, nullptr);
         if (tr) {
-            obs_source_set_hide_transition(src, tr);
-            obs_source_set_hide_transition_duration(src, dur);
+            obs_sceneitem_set_transition(item, false, tr);
+            obs_sceneitem_set_transition_duration(item, false, (uint32_t)dur);
             obs_source_release(tr);
         }
     }
@@ -258,11 +256,11 @@ void SourceTransitionDock::onHideTransitionChanged()
 
 void SourceTransitionDock::onApplyToAll()
 {
-    if (selectedSources.isEmpty()) return;
+    if (selectedItems.isEmpty()) return;
     QString showId = showTransition->currentData().toString();
     int showDur = showDuration->value();
     QString hideId = hideTransition->currentData().toString();
     int hideDur = hideDuration->value();
-    for (auto *src : selectedSources)
-        applyTransitionToSource(src, showId, showDur, hideId, hideDur);
+    for (auto *item : selectedItems)
+        applyTransitionToItem(item, showId, showDur, hideId, hideDur);
 }
