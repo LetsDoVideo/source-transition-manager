@@ -9,6 +9,7 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <obs.h>
+#include <util/platform.h>
 
 class SourceTransitionDock : public QWidget {
     Q_OBJECT
@@ -18,6 +19,7 @@ public:
     ~SourceTransitionDock();
 
 private slots:
+    void onSceneChanged();
     void refreshSelectedSources();
     void onShowTransitionChanged();
     void onHideTransitionChanged();
@@ -25,6 +27,8 @@ private slots:
 
 private:
     void setupUI();
+    void connectSceneSignals(obs_source_t *scene_source);
+    void disconnectSceneSignals();
     void loadTransitionsForItem(obs_sceneitem_t *item);
     void applyTransitionToItem(obs_sceneitem_t *item,
                                const QString &showId, int showDuration,
@@ -42,5 +46,6 @@ private:
     QSpinBox     *hideDuration     = nullptr;
     QPushButton  *applyAllButton   = nullptr;
 
+    obs_source_t            *currentScene = nullptr;
     QList<obs_sceneitem_t *> selectedItems;
 };
