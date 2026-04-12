@@ -1,7 +1,7 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
+#include <plugin-support.h>
 #include <QMainWindow>
-#include <QAction>
 #include "SourceTransitionDock.hpp"
 
 OBS_DECLARE_MODULE()
