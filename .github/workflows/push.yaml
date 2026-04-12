@@ -1,119 +1,102 @@
-name: Push
-run-name: ${{ github.ref_name }} push run 🚀
+name: Build and Release
+permissions:
+  actions: read
+  contents: write
+  security-events: write
+  id-token: write
 on:
   push:
-    branches:
-      - master
-      - main
-      - 'release/**'
+    branches: [ master, main ]
     tags:
-      - '*'
-permissions:
-  contents: write
+      - 'v*'
 jobs:
-  check-format:
-    name: Check Formatting 🔍
-    if: github.ref_name == 'master' || github.ref_name == 'main'
-    uses: ./.github/workflows/check-format.yaml
-    permissions:
-      contents: read
-
-  build-project:
-    name: Build Project 🧱
-    uses: ./.github/workflows/build-project.yaml
-    secrets: inherit
-    permissions:
-      contents: read
-
-  create-release:
-    name: Create Release 🛫
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-24.04
-    needs: build-project
-    defaults:
-      run:
-        shell: bash
+  build:
+    name: Build Source Transition Manager
+    runs-on: windows-latest
+    environment: release
     steps:
-      - name: Check Release Tag ☑️
-        id: check
-        run: |
-          : Check Release Tag ☑️
-          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
-          shopt -s extglob
-
-          case "${GITHUB_REF_NAME}" in
-            +([0-9]).+([0-9]).+([0-9]) )
-              echo 'validTag=true' >> $GITHUB_OUTPUT
-              echo 'prerelease=false' >> $GITHUB_OUTPUT
-              echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-              ;;
-            +([0-9]).+([0-9]).+([0-9])-@(beta|rc)*([0-9]) )
-              echo 'validTag=true' >> $GITHUB_OUTPUT
-              echo 'prerelease=true' >> $GITHUB_OUTPUT
-              echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-              ;;
-            *) echo 'validTag=false' >> $GITHUB_OUTPUT ;;
-          esac
-
-      - name: Download Build Artifacts 📥
-        uses: actions/download-artifact@v4
-        if: fromJSON(steps.check.outputs.validTag)
-        id: download
-
-      - name: Rename Files 🏷️
-        if: fromJSON(steps.check.outputs.validTag)
-        run: |
-          : Rename Files 🏷️
-          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
-          shopt -s extglob
-          shopt -s nullglob
-
-          root_dir="$(pwd)"
-          commit_hash="${GITHUB_SHA:0:9}"
-
-          variants=(
-            'windows-x64;zip|exe'
-            'macos-universal;tar.xz|pkg'
-            'ubuntu-24.04-x86_64;tar.xz|deb|ddeb'
-            'sources;tar.xz'
-          )
-
-          for variant_data in "${variants[@]}"; do
-            IFS=';' read -r variant suffix <<< "${variant_data}"
-
-            candidates=(*-${variant}-${commit_hash}/@(*|*-dbgsym).@(${suffix}))
-
-            for candidate in "${candidates[@]}"; do
-              mv "${candidate}" "${root_dir}"
-            done
-          done
-
-      - name: Generate Checksums 🪪
-        if: fromJSON(steps.check.outputs.validTag)
-        run: |
-          : Generate Checksums 🪪
-          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
-          shopt -s extglob
-
-          echo "### Checksums" > ${{ github.workspace }}/CHECKSUMS.txt
-          for file in ${{ github.workspace }}/@(*.exe|*.deb|*.ddeb|*.pkg|*.tar.xz|*.zip); do
-            echo "    ${file##*/}: $(sha256sum "${file}" | cut -d " " -f 1)" >> ${{ github.workspace }}/CHECKSUMS.txt
-          done
-
-      - name: Create Release 🛫
-        if: fromJSON(steps.check.outputs.validTag)
-        id: create_release
-        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564
+      - name: Checkout Code
+        uses: actions/checkout@v4
         with:
-          draft: true
-          prerelease: ${{ fromJSON(steps.check.outputs.prerelease) }}
-          tag_name: ${{ steps.check.outputs.version }}
-          name: ${{ needs.build-project.outputs.pluginName }} ${{ steps.check.outputs.version }}
-          body_path: ${{ github.workspace }}/CHECKSUMS.txt
+          submodules: recursive
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.5.3'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          install-deps: 'true'
+      - name: Configure and Build
+        shell: cmd
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64
+          cmake --build build --config Release
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign Plugin
+        uses: azure/trusted-signing-action@v0.4.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          endpoint: https://eus.codesigning.azure.net/
+          trusted-signing-account-name: feeds-signing
+          certificate-profile-name: feeds-signing
+          files-folder: ${{ github.workspace }}\build\Release
+          files-folder-filter: source-transition-manager.dll
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Assemble Drop-in ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/obs-plugins/64bit"
+          Copy-Item "build/Release/source-transition-manager.dll" -Destination "dist/obs-plugins/64bit/"
+          Copy-Item "build/Release/source-transition-manager.pdb" -Destination "dist/obs-plugins/64bit/"
+          New-Item -ItemType Directory -Force -Path "dist/data/obs-plugins/source-transition-manager/locale"
+          Copy-Item "data/locale/en-US.ini" -Destination "dist/data/obs-plugins/source-transition-manager/locale/"
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/*" -DestinationPath "SourceTransitionManager-${{ github.ref_name }}-windows-x64.zip"
+      - name: Install NSIS
+        run: choco install nsis -y
+      - name: Build Installer
+        shell: cmd
+        run: |
+          copy LICENSE installer\LICENSE
+          "C:\Program Files (x86)\NSIS\makensis.exe" /DROOT_DIR="%CD%" installer\source-transition-manager-installer.nsi
+          move installer\SourceTransitionManager-Setup.exe SourceTransitionManager-${{ github.ref_name }}-Setup.exe
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SourceTransitionManager-${{ github.ref_name }}
+          path: |
+            SourceTransitionManager-*-windows-x64.zip
+            SourceTransitionManager-*-Setup.exe
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: SourceTransitionManager-${{ github.ref_name }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
           files: |
-            ${{ github.workspace }}/*.exe
-            ${{ github.workspace }}/*.zip
-            ${{ github.workspace }}/*.pkg
-            ${{ github.workspace }}/*.deb
-            ${{ github.workspace }}/*.ddeb
-            ${{ github.workspace }}/*.tar.xz
+            SourceTransitionManager-*-windows-x64.zip
+            SourceTransitionManager-*-Setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
