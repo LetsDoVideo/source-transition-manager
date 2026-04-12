@@ -8,7 +8,7 @@
 #include <QPushButton>
 #include <obs-module.h>
 #include <obs-frontend-api.h>
-#include <obs-scene.h>
+#include <obs.h>
 
 class SourceTransitionDock : public QWidget {
     Q_OBJECT
