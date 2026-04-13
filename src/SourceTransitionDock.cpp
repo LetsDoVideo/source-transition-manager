@@ -33,14 +33,19 @@ SourceTransitionDock::SourceTransitionDock(QWidget *parent)
 {
     setupUI();
     obs_frontend_add_event_callback(frontendEventCallback, this);
-   }
+}
 
 SourceTransitionDock::~SourceTransitionDock()
 {
     obs_frontend_remove_event_callback(frontendEventCallback, this);
+}
+
+void SourceTransitionDock::cleanup()
+{
     disconnectSceneSignals();
     for (auto *item : selectedItems)
         obs_sceneitem_release(item);
+    selectedItems.clear();
 }
 
 QPushButton *SourceTransitionDock::makeIconButton(QStyle::StandardPixmap icon,
@@ -83,7 +88,7 @@ void SourceTransitionDock::setupUI()
     showHeader->addWidget(new QLabel("<b>Show Transition</b>", showGroup));
     showHeader->addStretch();
 
-    auto *showCog = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
+    auto *showCog   = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
     auto *showCopy  = makeIconButton(QStyle::SP_DialogSaveButton,       "Copy");
     auto *showPaste = makeIconButton(QStyle::SP_DialogOpenButton,        "Paste");
     showHeader->addWidget(showCog);
@@ -123,7 +128,7 @@ void SourceTransitionDock::setupUI()
     hideHeader->addWidget(new QLabel("<b>Hide Transition</b>", hideGroup));
     hideHeader->addStretch();
 
-    auto *hideCog = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
+    auto *hideCog   = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
     auto *hideCopy  = makeIconButton(QStyle::SP_DialogSaveButton,       "Copy");
     auto *hidePaste = makeIconButton(QStyle::SP_DialogOpenButton,        "Paste");
     hideHeader->addWidget(hideCog);
@@ -250,6 +255,10 @@ void SourceTransitionDock::frontendEventCallback(obs_frontend_event event, void 
     case OBS_FRONTEND_EVENT_SCENE_CHANGED:
     case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
         QMetaObject::invokeMethod(dock, "onSceneChanged", Qt::QueuedConnection);
+        break;
+    case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
+    case OBS_FRONTEND_EVENT_EXIT:
+        QMetaObject::invokeMethod(dock, "cleanup", Qt::QueuedConnection);
         break;
     default:
         break;
@@ -394,7 +403,6 @@ void SourceTransitionDock::onPasteShow()
 {
     if (selectedItems.isEmpty()) return;
 
-    // Use show clipboard if available, fall back to hide clipboard
     TransitionClipboard &src = showClipboard.hasData ? showClipboard : hideClipboard;
     if (!src.hasData) return;
 
@@ -423,7 +431,6 @@ void SourceTransitionDock::onPasteHide()
 {
     if (selectedItems.isEmpty()) return;
 
-    // Use hide clipboard if available, fall back to show clipboard
     TransitionClipboard &src = hideClipboard.hasData ? hideClipboard : showClipboard;
     if (!src.hasData) return;
 
