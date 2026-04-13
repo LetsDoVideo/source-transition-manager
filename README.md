@@ -1,5 +1,5 @@
 
-# Source Transition Manager for OBS
+# Source Transition Manager
 
 A plugin for OBS Studio that makes managing source show/hide transitions fast and easy.
 
