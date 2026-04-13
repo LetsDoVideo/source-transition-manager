@@ -30,6 +30,7 @@ public:
 
 private slots:
     void onSceneChanged();
+    void cleanup();
     void refreshSelectedSources();
     void onShowTransitionChanged();
     void onHideTransitionChanged();
