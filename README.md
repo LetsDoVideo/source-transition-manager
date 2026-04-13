@@ -1,3 +1,4 @@
+
 # Source Transition Manager for OBS
 
 A plugin for OBS Studio that makes managing source show/hide transitions fast and easy.
@@ -10,6 +11,8 @@ once for hide — because the menu closes after each change. With multiple sourc
 becomes tedious quickly.
 
 ## The Solution
+<img width="349" height="313" alt="STM" src="https://github.com/user-attachments/assets/8e3b6d73-b6fc-4dd1-b59f-ad33c5052a0d" />
+
 
 Source Transition Manager adds a dock to OBS that lets you:
 
