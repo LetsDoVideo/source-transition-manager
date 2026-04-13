@@ -76,13 +76,17 @@ void SourceTransitionDock::setupUI()
     QGroupBox   *showGroup  = new QGroupBox(controlsWidget);
     QVBoxLayout *showLayout = new QVBoxLayout(showGroup);
     showLayout->setSpacing(4);
+    showGroup->setStyleSheet("QGroupBox { margin-top: 0px; padding-top: 4px; }");
 
     // Header row: label + cog + copy + paste
     QHBoxLayout *showHeader = new QHBoxLayout();
     showHeader->addWidget(new QLabel("<b>Show Transition</b>", showGroup));
     showHeader->addStretch();
 
-    auto *showCog   = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
+    auto *showCog   = new QPushButton("⚙", showGroup);
+    showCog->setFixedSize(22, 22);
+    showCog->setFlat(true);
+    showCog->setToolTip("Properties");
     auto *showCopy  = makeIconButton(QStyle::SP_DialogSaveButton,       "Copy");
     auto *showPaste = makeIconButton(QStyle::SP_DialogOpenButton,        "Paste");
     showHeader->addWidget(showCog);
@@ -116,12 +120,16 @@ void SourceTransitionDock::setupUI()
     QGroupBox   *hideGroup  = new QGroupBox(controlsWidget);
     QVBoxLayout *hideLayout = new QVBoxLayout(hideGroup);
     hideLayout->setSpacing(4);
+    hideGroup->setStyleSheet("QGroupBox { margin-top: 0px; padding-top: 4px; }");
 
     QHBoxLayout *hideHeader = new QHBoxLayout();
     hideHeader->addWidget(new QLabel("<b>Hide Transition</b>", hideGroup));
     hideHeader->addStretch();
 
-    auto *hideCog   = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
+    auto *hideCog   = new QPushButton("⚙", hideGroup);
+    hideCog->setFixedSize(22, 22);
+    hideCog->setFlat(true);
+    hideCog->setToolTip("Properties");
     auto *hideCopy  = makeIconButton(QStyle::SP_DialogSaveButton,       "Copy");
     auto *hidePaste = makeIconButton(QStyle::SP_DialogOpenButton,        "Paste");
     hideHeader->addWidget(hideCog);
@@ -189,11 +197,11 @@ void SourceTransitionDock::injectIntoSourcesDock()
             titleLayout->setSpacing(0);
 
             auto *stmButton = new QPushButton();
-            stmButton->setIcon(QApplication::style()->standardIcon(
-                QStyle::SP_MediaPlay));
-            stmButton->setFixedSize(18, 18);
+            stmButton->setText("STM");
+            stmButton->setFixedSize(32, 18);
             stmButton->setFlat(true);
             stmButton->setToolTip("Source Transition Manager");
+            stmButton->setStyleSheet("font-size: 8px; font-weight: bold; padding: 0px;");
 
             auto *titleLabel = new QLabel(dock->windowTitle());
             titleLabel->setAlignment(Qt::AlignCenter);
