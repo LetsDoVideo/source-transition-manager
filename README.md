@@ -6,9 +6,8 @@ A plugin for OBS Studio that makes managing source show/hide transitions fast an
 ## The Problem
 
 Setting show and hide transitions on sources in OBS requires right-clicking a source, 
-navigating a crowded menu, and opening the transition dialog twice, once for show, 
-once for hide, because the menu closes after each change. With multiple sources this 
-becomes tedious quickly.
+navigating a crowded menu, and opening the transition dialog twice (once for show, 
+once for hide), because the menu closes after each change. With multiple sources the time starts adding up.
 
 ## The Solution
 <img width="349" height="313" alt="STM" src="https://github.com/user-attachments/assets/8e3b6d73-b6fc-4dd1-b59f-ad33c5052a0d" />
@@ -32,7 +31,7 @@ Source Transition Manager adds a dock to OBS that lets you:
 ## Usage
 
 1. Open the dock from the **Docks** menu, or click the **STM** button on the Sources panel
-2. Select any source in your scene — the dock updates live
+2. Select any source in your scene. The dock updates live
 3. Adjust show/hide transition type and duration
 4. Use the properties button to access advanced settings for transitions like Luma Wipe
 5. Use copy/paste buttons to apply settings from one source to others
