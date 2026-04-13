@@ -5,6 +5,12 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 #include <QGroupBox>
+#include <QStyle>
+#include <QApplication>
+#include <QMainWindow>
+#include <QDockWidget>
+#include <QMessageBox>
+#include <obs-properties.h>
 
 static const QList<QPair<QString, QString>> TRANSITION_TYPES = {
     {"cut_transition",           "Cut"},
@@ -16,8 +22,7 @@ static const QList<QPair<QString, QString>> TRANSITION_TYPES = {
     {"wipe_transition",          "Luma Wipe"},
 };
 
-// Signal handler trampoline — OBS signals are C callbacks
-static void onItemSelect(void *data, calldata_t *)
+static void onItemSelectSignal(void *data, calldata_t *)
 {
     auto *dock = static_cast<SourceTransitionDock *>(data);
     QMetaObject::invokeMethod(dock, "refreshSelectedSources", Qt::QueuedConnection);
@@ -38,12 +43,24 @@ SourceTransitionDock::~SourceTransitionDock()
         obs_sceneitem_release(item);
 }
 
+QPushButton *SourceTransitionDock::makeIconButton(QStyle::StandardPixmap icon,
+                                                   const QString &tooltip)
+{
+    auto *btn = new QPushButton(this);
+    btn->setIcon(QApplication::style()->standardIcon(icon));
+    btn->setFixedSize(22, 22);
+    btn->setFlat(true);
+    btn->setToolTip(tooltip);
+    return btn;
+}
+
 void SourceTransitionDock::setupUI()
 {
     mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(4, 4, 4, 4);
     mainLayout->setSpacing(4);
 
+    // Placeholder
     placeholderLabel = new QLabel("Select a source to see transitions", this);
     placeholderLabel->setAlignment(Qt::AlignCenter);
     placeholderLabel->setWordWrap(true);
@@ -55,25 +72,39 @@ void SourceTransitionDock::setupUI()
     controlsLayout->setContentsMargins(0, 0, 0, 0);
     controlsLayout->setSpacing(6);
 
-    // Show transition group
-    QGroupBox *showGroup = new QGroupBox("Show Transition", controlsWidget);
+    // ── Show Transition Group ──────────────────────────────────────
+    QGroupBox   *showGroup  = new QGroupBox(controlsWidget);
     QVBoxLayout *showLayout = new QVBoxLayout(showGroup);
+    showLayout->setSpacing(4);
 
+    // Header row: label + cog + copy + paste
+    QHBoxLayout *showHeader = new QHBoxLayout();
+    showHeader->addWidget(new QLabel("<b>Show Transition</b>", showGroup));
+    showHeader->addStretch();
+
+    auto *showCog   = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
+    auto *showCopy  = makeIconButton(QStyle::SP_DialogSaveButton,       "Copy");
+    auto *showPaste = makeIconButton(QStyle::SP_DialogOpenButton,        "Paste");
+    showHeader->addWidget(showCog);
+    showHeader->addWidget(showCopy);
+    showHeader->addWidget(showPaste);
+    showLayout->addLayout(showHeader);
+
+    // Type row
     showTransition = new QComboBox(showGroup);
     for (auto &t : TRANSITION_TYPES)
         showTransition->addItem(t.second, t.first);
-
-    showDuration = new QSpinBox(showGroup);
-    showDuration->setRange(0, 10000);
-    showDuration->setSingleStep(100);
-    showDuration->setSuffix(" ms");
-    showDuration->setValue(300);
-
     QHBoxLayout *showTypeRow = new QHBoxLayout();
     showTypeRow->addWidget(new QLabel("Type:", showGroup));
     showTypeRow->addWidget(showTransition, 1);
     showLayout->addLayout(showTypeRow);
 
+    // Duration row
+    showDuration = new QSpinBox(showGroup);
+    showDuration->setRange(0, 10000);
+    showDuration->setSingleStep(100);
+    showDuration->setSuffix(" ms");
+    showDuration->setValue(300);
     QHBoxLayout *showDurRow = new QHBoxLayout();
     showDurRow->addWidget(new QLabel("Duration:", showGroup));
     showDurRow->addWidget(showDuration, 1);
@@ -81,25 +112,36 @@ void SourceTransitionDock::setupUI()
 
     controlsLayout->addWidget(showGroup);
 
-    // Hide transition group
-    QGroupBox *hideGroup = new QGroupBox("Hide Transition", controlsWidget);
+    // ── Hide Transition Group ──────────────────────────────────────
+    QGroupBox   *hideGroup  = new QGroupBox(controlsWidget);
     QVBoxLayout *hideLayout = new QVBoxLayout(hideGroup);
+    hideLayout->setSpacing(4);
+
+    QHBoxLayout *hideHeader = new QHBoxLayout();
+    hideHeader->addWidget(new QLabel("<b>Hide Transition</b>", hideGroup));
+    hideHeader->addStretch();
+
+    auto *hideCog   = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
+    auto *hideCopy  = makeIconButton(QStyle::SP_DialogSaveButton,       "Copy");
+    auto *hidePaste = makeIconButton(QStyle::SP_DialogOpenButton,        "Paste");
+    hideHeader->addWidget(hideCog);
+    hideHeader->addWidget(hideCopy);
+    hideHeader->addWidget(hidePaste);
+    hideLayout->addLayout(hideHeader);
 
     hideTransition = new QComboBox(hideGroup);
     for (auto &t : TRANSITION_TYPES)
         hideTransition->addItem(t.second, t.first);
+    QHBoxLayout *hideTypeRow = new QHBoxLayout();
+    hideTypeRow->addWidget(new QLabel("Type:", hideGroup));
+    hideTypeRow->addWidget(hideTransition, 1);
+    hideLayout->addLayout(hideTypeRow);
 
     hideDuration = new QSpinBox(hideGroup);
     hideDuration->setRange(0, 10000);
     hideDuration->setSingleStep(100);
     hideDuration->setSuffix(" ms");
     hideDuration->setValue(300);
-
-    QHBoxLayout *hideTypeRow = new QHBoxLayout();
-    hideTypeRow->addWidget(new QLabel("Type:", hideGroup));
-    hideTypeRow->addWidget(hideTransition, 1);
-    hideLayout->addLayout(hideTypeRow);
-
     QHBoxLayout *hideDurRow = new QHBoxLayout();
     hideDurRow->addWidget(new QLabel("Duration:", hideGroup));
     hideDurRow->addWidget(hideDuration, 1);
@@ -107,19 +149,69 @@ void SourceTransitionDock::setupUI()
 
     controlsLayout->addWidget(hideGroup);
 
-    applyAllButton = new QPushButton("Apply to All Selected Sources", controlsWidget);
-    controlsLayout->addWidget(applyAllButton);
+    // ── Apply to Scene button ──────────────────────────────────────
+    applySceneButton = new QPushButton("Apply to All Sources in Scene", controlsWidget);
+    controlsLayout->addWidget(applySceneButton);
     controlsLayout->addStretch();
 
     mainLayout->addWidget(controlsWidget);
     controlsWidget->hide();
 
+    // ── Connections ───────────────────────────────────────────────
     connect(showTransition, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SourceTransitionDock::onShowTransitionChanged);
     connect(hideTransition, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SourceTransitionDock::onHideTransitionChanged);
-    connect(applyAllButton, &QPushButton::clicked,
-            this, &SourceTransitionDock::onApplyToAll);
+    connect(showDuration, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &SourceTransitionDock::onShowDurationChanged);
+    connect(hideDuration, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &SourceTransitionDock::onHideDurationChanged);
+    connect(showCog,   &QPushButton::clicked, this, &SourceTransitionDock::onShowProperties);
+    connect(hideCog,   &QPushButton::clicked, this, &SourceTransitionDock::onHideProperties);
+    connect(showCopy,  &QPushButton::clicked, this, &SourceTransitionDock::onCopyShow);
+    connect(hideCopy,  &QPushButton::clicked, this, &SourceTransitionDock::onCopyHide);
+    connect(showPaste, &QPushButton::clicked, this, &SourceTransitionDock::onPasteShow);
+    connect(hidePaste, &QPushButton::clicked, this, &SourceTransitionDock::onPasteHide);
+    connect(applySceneButton, &QPushButton::clicked,
+            this, &SourceTransitionDock::onApplyToScene);
+}
+
+void SourceTransitionDock::injectIntoSourcesDock()
+{
+    auto *mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+    if (!mainWindow) return;
+
+    for (auto *dock : mainWindow->findChildren<QDockWidget *>()) {
+        if (dock->objectName() == "sourcesDock") {
+            auto *titleWidget = new QWidget();
+            auto *titleLayout = new QHBoxLayout(titleWidget);
+            titleLayout->setContentsMargins(4, 0, 4, 0);
+            titleLayout->setSpacing(0);
+
+            auto *stmButton = new QPushButton();
+            stmButton->setIcon(QApplication::style()->standardIcon(
+                QStyle::SP_MediaPlay));
+            stmButton->setFixedSize(18, 18);
+            stmButton->setFlat(true);
+            stmButton->setToolTip("Source Transition Manager");
+
+            auto *titleLabel = new QLabel(dock->windowTitle());
+            titleLabel->setAlignment(Qt::AlignCenter);
+
+            titleLayout->addWidget(stmButton);
+            titleLayout->addWidget(titleLabel, 1);
+
+            dock->setTitleBarWidget(titleWidget);
+
+            connect(stmButton, &QPushButton::clicked, this, [this]() {
+                auto *parentDock = qobject_cast<QDockWidget *>(
+                    this->parentWidget());
+                if (parentDock)
+                    parentDock->setVisible(!parentDock->isVisible());
+            });
+            break;
+        }
+    }
 }
 
 void SourceTransitionDock::connectSceneSignals(obs_source_t *scene_source)
@@ -127,8 +219,8 @@ void SourceTransitionDock::connectSceneSignals(obs_source_t *scene_source)
     if (!scene_source) return;
     signal_handler_t *sh = obs_source_get_signal_handler(scene_source);
     if (!sh) return;
-    signal_handler_connect(sh, "item_select",   onItemSelect, this);
-    signal_handler_connect(sh, "item_deselect", onItemSelect, this);
+    signal_handler_connect(sh, "item_select",   onItemSelectSignal, this);
+    signal_handler_connect(sh, "item_deselect", onItemSelectSignal, this);
     currentScene = scene_source;
 }
 
@@ -137,8 +229,8 @@ void SourceTransitionDock::disconnectSceneSignals()
     if (!currentScene) return;
     signal_handler_t *sh = obs_source_get_signal_handler(currentScene);
     if (sh) {
-        signal_handler_disconnect(sh, "item_select",   onItemSelect, this);
-        signal_handler_disconnect(sh, "item_deselect", onItemSelect, this);
+        signal_handler_disconnect(sh, "item_select",   onItemSelectSignal, this);
+        signal_handler_disconnect(sh, "item_deselect", onItemSelectSignal, this);
     }
     currentScene = nullptr;
 }
@@ -147,6 +239,10 @@ void SourceTransitionDock::frontendEventCallback(obs_frontend_event event, void 
 {
     auto *dock = static_cast<SourceTransitionDock *>(data);
     switch (event) {
+    case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+        QMetaObject::invokeMethod(dock, "onSceneChanged", Qt::QueuedConnection);
+        dock->injectIntoSourcesDock();
+        break;
     case OBS_FRONTEND_EVENT_SCENE_CHANGED:
     case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
         QMetaObject::invokeMethod(dock, "onSceneChanged", Qt::QueuedConnection);
@@ -169,7 +265,6 @@ void SourceTransitionDock::onSceneChanged()
 
     connectSceneSignals(scene_source);
     obs_source_release(scene_source);
-
     refreshSelectedSources();
 }
 
@@ -216,22 +311,18 @@ void SourceTransitionDock::loadTransitionsForItem(obs_sceneitem_t *item)
     showDuration->blockSignals(true);
     hideDuration->blockSignals(true);
 
-    // Do NOT release — we don't own this reference
     obs_source_t *showTr = obs_sceneitem_get_transition(item, true);
     if (showTr) {
-        const char *id = obs_source_get_id(showTr);
-        int idx = showTransition->findData(QString(id));
+        int idx = showTransition->findData(QString(obs_source_get_id(showTr)));
         if (idx >= 0) showTransition->setCurrentIndex(idx);
     } else {
         showTransition->setCurrentIndex(0);
     }
     showDuration->setValue((int)obs_sceneitem_get_transition_duration(item, true));
 
-    // Do NOT release — we don't own this reference
     obs_source_t *hideTr = obs_sceneitem_get_transition(item, false);
     if (hideTr) {
-        const char *id = obs_source_get_id(hideTr);
-        int idx = hideTransition->findData(QString(id));
+        int idx = hideTransition->findData(QString(obs_source_get_id(hideTr)));
         if (idx >= 0) hideTransition->setCurrentIndex(idx);
     } else {
         hideTransition->setCurrentIndex(0);
@@ -255,7 +346,6 @@ void SourceTransitionDock::applyTransitionToItem(obs_sceneitem_t *item,
         obs_sceneitem_set_transition_duration(item, true, (uint32_t)showDur);
         obs_source_release(showTr);
     }
-
     obs_source_t *hideTr = obs_source_create_private(
         hideId.toUtf8().constData(), nullptr, nullptr);
     if (hideTr) {
@@ -265,11 +355,100 @@ void SourceTransitionDock::applyTransitionToItem(obs_sceneitem_t *item,
     }
 }
 
+void SourceTransitionDock::openProperties(bool show)
+{
+    if (selectedItems.isEmpty()) return;
+    obs_source_t *tr = obs_sceneitem_get_transition(selectedItems.first(), show);
+    if (!tr) return;
+    obs_frontend_open_source_properties(tr);
+}
+
+void SourceTransitionDock::onShowProperties() { openProperties(true);  }
+void SourceTransitionDock::onHideProperties() { openProperties(false); }
+
+void SourceTransitionDock::onCopyShow()
+{
+    if (selectedItems.isEmpty()) return;
+    obs_source_t *tr = obs_sceneitem_get_transition(selectedItems.first(), true);
+    showClipboard.typeId   = tr ? QString(obs_source_get_id(tr))
+                                : showTransition->currentData().toString();
+    showClipboard.duration = showDuration->value();
+    showClipboard.hasData  = true;
+}
+
+void SourceTransitionDock::onCopyHide()
+{
+    if (selectedItems.isEmpty()) return;
+    obs_source_t *tr = obs_sceneitem_get_transition(selectedItems.first(), false);
+    hideClipboard.typeId   = tr ? QString(obs_source_get_id(tr))
+                                : hideTransition->currentData().toString();
+    hideClipboard.duration = hideDuration->value();
+    hideClipboard.hasData  = true;
+}
+
+void SourceTransitionDock::onPasteShow()
+{
+    if (selectedItems.isEmpty()) return;
+
+    // Use show clipboard if available, fall back to hide clipboard
+    TransitionClipboard &src = showClipboard.hasData ? showClipboard : hideClipboard;
+    if (!src.hasData) return;
+
+    showTransition->blockSignals(true);
+    showDuration->blockSignals(true);
+
+    int idx = showTransition->findData(src.typeId);
+    if (idx >= 0) showTransition->setCurrentIndex(idx);
+    showDuration->setValue(src.duration);
+
+    showTransition->blockSignals(false);
+    showDuration->blockSignals(false);
+
+    for (auto *item : selectedItems) {
+        obs_source_t *tr = obs_source_create_private(
+            src.typeId.toUtf8().constData(), nullptr, nullptr);
+        if (tr) {
+            obs_sceneitem_set_transition(item, true, tr);
+            obs_sceneitem_set_transition_duration(item, true, (uint32_t)src.duration);
+            obs_source_release(tr);
+        }
+    }
+}
+
+void SourceTransitionDock::onPasteHide()
+{
+    if (selectedItems.isEmpty()) return;
+
+    // Use hide clipboard if available, fall back to show clipboard
+    TransitionClipboard &src = hideClipboard.hasData ? hideClipboard : showClipboard;
+    if (!src.hasData) return;
+
+    hideTransition->blockSignals(true);
+    hideDuration->blockSignals(true);
+
+    int idx = hideTransition->findData(src.typeId);
+    if (idx >= 0) hideTransition->setCurrentIndex(idx);
+    hideDuration->setValue(src.duration);
+
+    hideTransition->blockSignals(false);
+    hideDuration->blockSignals(false);
+
+    for (auto *item : selectedItems) {
+        obs_source_t *tr = obs_source_create_private(
+            src.typeId.toUtf8().constData(), nullptr, nullptr);
+        if (tr) {
+            obs_sceneitem_set_transition(item, false, tr);
+            obs_sceneitem_set_transition_duration(item, false, (uint32_t)src.duration);
+            obs_source_release(tr);
+        }
+    }
+}
+
 void SourceTransitionDock::onShowTransitionChanged()
 {
     if (selectedItems.isEmpty()) return;
-    QString id = showTransition->currentData().toString();
-    int dur = showDuration->value();
+    QString id  = showTransition->currentData().toString();
+    int     dur = showDuration->value();
     for (auto *item : selectedItems) {
         obs_source_t *tr = obs_source_create_private(
             id.toUtf8().constData(), nullptr, nullptr);
@@ -284,8 +463,8 @@ void SourceTransitionDock::onShowTransitionChanged()
 void SourceTransitionDock::onHideTransitionChanged()
 {
     if (selectedItems.isEmpty()) return;
-    QString id = hideTransition->currentData().toString();
-    int dur = hideDuration->value();
+    QString id  = hideTransition->currentData().toString();
+    int     dur = hideDuration->value();
     for (auto *item : selectedItems) {
         obs_source_t *tr = obs_source_create_private(
             id.toUtf8().constData(), nullptr, nullptr);
@@ -297,13 +476,53 @@ void SourceTransitionDock::onHideTransitionChanged()
     }
 }
 
-void SourceTransitionDock::onApplyToAll()
+void SourceTransitionDock::onShowDurationChanged()
 {
     if (selectedItems.isEmpty()) return;
-    QString showId = showTransition->currentData().toString();
-    int showDur = showDuration->value();
-    QString hideId = hideTransition->currentData().toString();
-    int hideDur = hideDuration->value();
+    int dur = showDuration->value();
     for (auto *item : selectedItems)
-        applyTransitionToItem(item, showId, showDur, hideId, hideDur);
+        obs_sceneitem_set_transition_duration(item, true, (uint32_t)dur);
+}
+
+void SourceTransitionDock::onHideDurationChanged()
+{
+    if (selectedItems.isEmpty()) return;
+    int dur = hideDuration->value();
+    for (auto *item : selectedItems)
+        obs_sceneitem_set_transition_duration(item, false, (uint32_t)dur);
+}
+
+void SourceTransitionDock::onApplyToScene()
+{
+    auto reply = QMessageBox::question(this,
+        "Apply to All Sources",
+        "Apply current Show and Hide transition settings to every source in the current scene?",
+        QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes) return;
+
+    QString showId  = showTransition->currentData().toString();
+    int     showDur = showDuration->value();
+    QString hideId  = hideTransition->currentData().toString();
+    int     hideDur = hideDuration->value();
+
+    obs_source_t *scene_source = obs_frontend_get_current_scene();
+    if (!scene_source) return;
+
+    obs_scene_t *scene = obs_scene_from_source(scene_source);
+    obs_source_release(scene_source);
+
+    struct ApplyData {
+        SourceTransitionDock *dock;
+        QString showId;
+        int     showDur;
+        QString hideId;
+        int     hideDur;
+    } applyData = {this, showId, showDur, hideId, hideDur};
+
+    obs_scene_enum_items(scene, [](obs_scene_t *, obs_sceneitem_t *item, void *data) -> bool {
+        auto *d = static_cast<ApplyData *>(data);
+        d->dock->applyTransitionToItem(item, d->showId, d->showDur,
+                                              d->hideId, d->hideDur);
+        return true;
+    }, &applyData);
 }
