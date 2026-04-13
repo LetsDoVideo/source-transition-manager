@@ -15,7 +15,7 @@ once for hide), because the menu closes after each change. With multiple sources
 
 Source Transition Manager adds a dock to OBS that lets you:
 
-- **See and change** show and hide transitions for any selected source in one place
+- **See and change** transitions for any selected source in one place
 - **Adjust both** show and hide type and duration without reopening anything
 - **Apply to all** sources in the current scene with one click
 - **Copy and paste** transition settings between sources
