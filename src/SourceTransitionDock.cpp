@@ -33,7 +33,7 @@ SourceTransitionDock::SourceTransitionDock(QWidget *parent)
 {
     setupUI();
     obs_frontend_add_event_callback(frontendEventCallback, this);
-}
+   }
 
 SourceTransitionDock::~SourceTransitionDock()
 {
@@ -176,6 +176,8 @@ void SourceTransitionDock::setupUI()
     connect(hidePaste, &QPushButton::clicked, this, &SourceTransitionDock::onPasteHide);
     connect(applySceneButton, &QPushButton::clicked,
             this, &SourceTransitionDock::onApplyToScene);
+
+    adjustSize();
 }
 
 void SourceTransitionDock::injectIntoSourcesDock()
