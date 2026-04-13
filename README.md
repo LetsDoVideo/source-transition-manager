@@ -46,3 +46,4 @@ Source Transition Manager adds a dock to OBS that lets you:
 ## By
 
 [Let's Do Video](https://letsdovideo.com)
+[Learn more at letsdovideo.com/stm](https://letsdovideo.com/stm)
