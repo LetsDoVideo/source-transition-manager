@@ -83,7 +83,7 @@ void SourceTransitionDock::setupUI()
     showHeader->addWidget(new QLabel("<b>Show Transition</b>", showGroup));
     showHeader->addStretch();
 
-    auto *showCog   = new QPushButton("⚙", showGroup);
+    auto *showCog   = new QPushButton(QString::fromUtf8("\xe2\x9a\x99"), showGroup);
     showCog->setFixedSize(22, 22);
     showCog->setFlat(true);
     showCog->setToolTip("Properties");
@@ -126,7 +126,7 @@ void SourceTransitionDock::setupUI()
     hideHeader->addWidget(new QLabel("<b>Hide Transition</b>", hideGroup));
     hideHeader->addStretch();
 
-    auto *hideCog   = new QPushButton("⚙", hideGroup);
+    auto *hideCog   = new QPushButton(QString::fromUtf8("\xe2\x9a\x99"), hideGroup);
     hideCog->setFixedSize(22, 22);
     hideCog->setFlat(true);
     hideCog->setToolTip("Properties");
