@@ -83,10 +83,7 @@ void SourceTransitionDock::setupUI()
     showHeader->addWidget(new QLabel("<b>Show Transition</b>", showGroup));
     showHeader->addStretch();
 
-    auto *showCog   = new QPushButton(QString::fromUtf8("\xe2\x9a\x99"), showGroup);
-    showCog->setFixedSize(22, 22);
-    showCog->setFlat(true);
-    showCog->setToolTip("Properties");
+    auto *showCog = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
     auto *showCopy  = makeIconButton(QStyle::SP_DialogSaveButton,       "Copy");
     auto *showPaste = makeIconButton(QStyle::SP_DialogOpenButton,        "Paste");
     showHeader->addWidget(showCog);
@@ -126,10 +123,7 @@ void SourceTransitionDock::setupUI()
     hideHeader->addWidget(new QLabel("<b>Hide Transition</b>", hideGroup));
     hideHeader->addStretch();
 
-    auto *hideCog   = new QPushButton(QString::fromUtf8("\xe2\x9a\x99"), hideGroup);
-    hideCog->setFixedSize(22, 22);
-    hideCog->setFlat(true);
-    hideCog->setToolTip("Properties");
+    auto *hideCog = makeIconButton(QStyle::SP_FileDialogDetailedView, "Properties");
     auto *hideCopy  = makeIconButton(QStyle::SP_DialogSaveButton,       "Copy");
     auto *hidePaste = makeIconButton(QStyle::SP_DialogOpenButton,        "Paste");
     hideHeader->addWidget(hideCog);
