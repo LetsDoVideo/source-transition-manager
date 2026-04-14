@@ -12,16 +12,6 @@
 #include <QMessageBox>
 #include <obs-properties.h>
 
-static const QList<QPair<QString, QString>> TRANSITION_TYPES = {
-    {"cut_transition",           "Cut"},
-    {"fade_transition",          "Fade"},
-    {"swipe_transition",         "Swipe"},
-    {"slide_transition",         "Slide"},
-    {"obs_stinger_transition",   "Stinger"},
-    {"fade_to_color_transition", "Fade to Color"},
-    {"wipe_transition",          "Luma Wipe"},
-};
-
 static void onItemSelectSignal(void *data, calldata_t *)
 {
     auto *dock = static_cast<SourceTransitionDock *>(data);
@@ -98,8 +88,12 @@ void SourceTransitionDock::setupUI()
 
     // Type row
     showTransition = new QComboBox(showGroup);
-    for (auto &t : TRANSITION_TYPES)
-        showTransition->addItem(t.second, t.first);
+    const char *typeId = nullptr;
+    size_t idx = 0;
+    while (obs_enum_transition_types(idx++, &typeId)) {
+        const char *name = obs_source_get_display_name(typeId);
+        showTransition->addItem(QString(name ? name : typeId), QString(typeId));
+    }
     QHBoxLayout *showTypeRow = new QHBoxLayout();
     showTypeRow->addWidget(new QLabel("Type:", showGroup));
     showTypeRow->addWidget(showTransition, 1);
@@ -137,8 +131,12 @@ void SourceTransitionDock::setupUI()
     hideLayout->addLayout(hideHeader);
 
     hideTransition = new QComboBox(hideGroup);
-    for (auto &t : TRANSITION_TYPES)
-        hideTransition->addItem(t.second, t.first);
+    const char *hideTypeId = nullptr;
+    size_t hideIdx = 0;
+    while (obs_enum_transition_types(hideIdx++, &hideTypeId)) {
+        const char *name = obs_source_get_display_name(hideTypeId);
+        hideTransition->addItem(QString(name ? name : hideTypeId), QString(hideTypeId));
+    }
     QHBoxLayout *hideTypeRow = new QHBoxLayout();
     hideTypeRow->addWidget(new QLabel("Type:", hideGroup));
     hideTypeRow->addWidget(hideTransition, 1);
