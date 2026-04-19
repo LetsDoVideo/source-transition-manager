@@ -55,7 +55,6 @@ void SourceTransitionDock::setupUI()
     mainLayout->setContentsMargins(4, 4, 4, 4);
     mainLayout->setSpacing(4);
 
-    // Placeholder
     placeholderLabel = new QLabel("Select a source to see transitions", this);
     placeholderLabel->setAlignment(Qt::AlignCenter);
     placeholderLabel->setWordWrap(true);
@@ -73,7 +72,6 @@ void SourceTransitionDock::setupUI()
     showLayout->setSpacing(4);
     showGroup->setStyleSheet("QGroupBox { margin-top: 0px; padding-top: 4px; }");
 
-    // Header row: label + cog + copy + paste
     QHBoxLayout *showHeader = new QHBoxLayout();
     showHeader->addWidget(new QLabel("<b>Show Transition</b>", showGroup));
     showHeader->addStretch();
@@ -86,20 +84,20 @@ void SourceTransitionDock::setupUI()
     showHeader->addWidget(showPaste);
     showLayout->addLayout(showHeader);
 
-    // Type row
     showTransition = new QComboBox(showGroup);
-    const char *typeId = nullptr;
-    size_t idx = 0;
-    while (obs_enum_transition_types(idx++, &typeId)) {
-        const char *name = obs_source_get_display_name(typeId);
-        showTransition->addItem(QString(name ? name : typeId), QString(typeId));
+    {
+        const char *typeId = nullptr;
+        size_t idx = 0;
+        while (obs_enum_transition_types(idx++, &typeId)) {
+            const char *name = obs_source_get_display_name(typeId);
+            showTransition->addItem(QString(name ? name : typeId), QString(typeId));
+        }
     }
     QHBoxLayout *showTypeRow = new QHBoxLayout();
     showTypeRow->addWidget(new QLabel("Type:", showGroup));
     showTypeRow->addWidget(showTransition, 1);
     showLayout->addLayout(showTypeRow);
 
-    // Duration row
     showDuration = new QSpinBox(showGroup);
     showDuration->setRange(0, 10000);
     showDuration->setSingleStep(100);
@@ -131,11 +129,13 @@ void SourceTransitionDock::setupUI()
     hideLayout->addLayout(hideHeader);
 
     hideTransition = new QComboBox(hideGroup);
-    const char *hideTypeId = nullptr;
-    size_t hideIdx = 0;
-    while (obs_enum_transition_types(hideIdx++, &hideTypeId)) {
-        const char *name = obs_source_get_display_name(hideTypeId);
-        hideTransition->addItem(QString(name ? name : hideTypeId), QString(hideTypeId));
+    {
+        const char *typeId = nullptr;
+        size_t idx = 0;
+        while (obs_enum_transition_types(idx++, &typeId)) {
+            const char *name = obs_source_get_display_name(typeId);
+            hideTransition->addItem(QString(name ? name : typeId), QString(typeId));
+        }
     }
     QHBoxLayout *hideTypeRow = new QHBoxLayout();
     hideTypeRow->addWidget(new QLabel("Type:", hideGroup));
@@ -346,19 +346,24 @@ void SourceTransitionDock::loadTransitionsForItem(obs_sceneitem_t *item)
     hideDuration->blockSignals(false);
 }
 
+static obs_source_t *createNamedTransition(const QString &id)
+{
+    const char *idStr = id.toUtf8().constData();
+    const char *name  = obs_source_get_display_name(idStr);
+    return obs_source_create_private(idStr, name ? name : idStr, nullptr);
+}
+
 void SourceTransitionDock::applyTransitionToItem(obs_sceneitem_t *item,
     const QString &showId, int showDur,
     const QString &hideId, int hideDur)
 {
-    obs_source_t *showTr = obs_source_create_private(
-        showId.toUtf8().constData(), nullptr, nullptr);
+    obs_source_t *showTr = createNamedTransition(showId);
     if (showTr) {
         obs_sceneitem_set_transition(item, true, showTr);
         obs_sceneitem_set_transition_duration(item, true, (uint32_t)showDur);
         obs_source_release(showTr);
     }
-    obs_source_t *hideTr = obs_source_create_private(
-        hideId.toUtf8().constData(), nullptr, nullptr);
+    obs_source_t *hideTr = createNamedTransition(hideId);
     if (hideTr) {
         obs_sceneitem_set_transition(item, false, hideTr);
         obs_sceneitem_set_transition_duration(item, false, (uint32_t)hideDur);
@@ -415,8 +420,7 @@ void SourceTransitionDock::onPasteShow()
     showDuration->blockSignals(false);
 
     for (auto *item : selectedItems) {
-        obs_source_t *tr = obs_source_create_private(
-            src.typeId.toUtf8().constData(), nullptr, nullptr);
+        obs_source_t *tr = createNamedTransition(src.typeId);
         if (tr) {
             obs_sceneitem_set_transition(item, true, tr);
             obs_sceneitem_set_transition_duration(item, true, (uint32_t)src.duration);
@@ -443,8 +447,7 @@ void SourceTransitionDock::onPasteHide()
     hideDuration->blockSignals(false);
 
     for (auto *item : selectedItems) {
-        obs_source_t *tr = obs_source_create_private(
-            src.typeId.toUtf8().constData(), nullptr, nullptr);
+        obs_source_t *tr = createNamedTransition(src.typeId);
         if (tr) {
             obs_sceneitem_set_transition(item, false, tr);
             obs_sceneitem_set_transition_duration(item, false, (uint32_t)src.duration);
@@ -459,8 +462,7 @@ void SourceTransitionDock::onShowTransitionChanged()
     QString id  = showTransition->currentData().toString();
     int     dur = showDuration->value();
     for (auto *item : selectedItems) {
-        obs_source_t *tr = obs_source_create_private(
-            id.toUtf8().constData(), nullptr, nullptr);
+        obs_source_t *tr = createNamedTransition(id);
         if (tr) {
             obs_sceneitem_set_transition(item, true, tr);
             obs_sceneitem_set_transition_duration(item, true, (uint32_t)dur);
@@ -475,8 +477,7 @@ void SourceTransitionDock::onHideTransitionChanged()
     QString id  = hideTransition->currentData().toString();
     int     dur = hideDuration->value();
     for (auto *item : selectedItems) {
-        obs_source_t *tr = obs_source_create_private(
-            id.toUtf8().constData(), nullptr, nullptr);
+        obs_source_t *tr = createNamedTransition(id);
         if (tr) {
             obs_sceneitem_set_transition(item, false, tr);
             obs_sceneitem_set_transition_duration(item, false, (uint32_t)dur);
